@@ -15,9 +15,12 @@ module GraphQL
       }
 
       def platform_trace(platform_key, key, data)
+        blacklist = options.fetch(:blacklist, [])
+        service = options.fetch(:service, 'ruby-graphql')
+
         pin = Datadog::Pin.get_from(self)
         unless pin
-          pin = Datadog::Pin.new('graphql-ruby', app: 'graphql-ruby')
+          pin = Datadog::Pin.new(service)
           pin.onto(self)
         end
 
@@ -30,7 +33,7 @@ module GraphQL
             span.set_tag(:selected_operation_name, data[:query].selected_operation_name)
             span.set_tag(:selected_operation_type, data[:query].selected_operation.operation_type)
             span.set_tag(:query_string, data[:query].query_string)
-            span.set_tag(:variables, data[:query].variables.to_h)
+            span.set_tag(:variables, scrub_variables(data[:query].variables.to_h), blacklist)
           end
           yield
         end
@@ -38,6 +41,10 @@ module GraphQL
 
       def platform_field_key(type, field)
         "#{type.name}.#{field.name}"
+      end
+
+      def scrub_variables(variables, blacklist)
+        Scrubber::Variables.perform(variables, blacklist)
       end
     end
   end
